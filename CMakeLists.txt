@@ -33,6 +33,9 @@ target_link_libraries(${PROJECT_NAME} algor spdlog::spdlog)
 # project deps
 add_subdirectory(deps)
 
+# other projects
+add_subdirectory(set)
+
 # test
 if(BUILD_TESTING)
     add_subdirectory(test)
