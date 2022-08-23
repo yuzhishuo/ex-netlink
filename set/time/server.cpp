@@ -7,6 +7,7 @@
 #include <sys/socket.h>  // socket
 #include <time.h>        // ctime
 #include <unistd.h>      // write
+#include <thread>
 
 int main(int argc, char const *argv[]) {
   auto fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -38,12 +39,14 @@ int main(int argc, char const *argv[]) {
         printf("accept error %s\n", strerror(errno));
         continue;
       } else {
-        auto ticks = time(NULL);
-        auto i = snprintf(buff, sizeof(buff), "%.24s\r\n", ctime(&ticks));
-        assert(i != -1);
-
-        auto write_size = write(cd, buff, sizeof(buff));
-        assert(write_size == sizeof(buff));
+        if (auto pid = fork(); pid == 0) { // child process
+          auto ticks = time(NULL);
+          auto i = snprintf(buff, sizeof(buff), "%.24s\r\n", ctime(&ticks));
+          assert(i != -1);
+          auto write_size = write(cd, buff, sizeof(buff));
+          assert(write_size == sizeof(buff));
+          std::this_thread::sleep_for(std::chrono::seconds(10));
+        }
       }
     }
   }
