@@ -2,8 +2,8 @@ FROM ubuntu:20.04
 
 WORKDIR /root/
 
-RUN mv /etc/apt/sources.list /etc/apt/sources.list.bak
-COPY --chown=root:root ./docker_files/sources.list /etc/apt/
+# RUN mv /etc/apt/sources.list /etc/apt/sources.list.bak
+# COPY --chown=root:root ./docker_files/sources.list /etc/apt/
 
 RUN apt-get update
 
