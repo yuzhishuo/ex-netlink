@@ -17,9 +17,22 @@ int main(int argc, char const *argv[]) {
     return -1;
   }
 
+  int reuseaddr = 1;
+  if (auto e = setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &reuseaddr,
+                          sizeof(reuseaddr));
+      e != 0) {
+    printf("setsocket error: %s\n", strerror(errno));
+  }
+
+  if (auto e = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuseaddr,
+                          sizeof(reuseaddr));
+      e != 0) {
+    printf("setsocket error: %s\n", strerror(errno));
+  }
+
   struct sockaddr_in addr;
   addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = INADDR_ANY;
+  inet_aton("127.0.0.1", &(addr.sin_addr));
   addr.sin_port = htons(13);
 
   if (auto bd = bind(fd, (sockaddr *)&addr, sizeof(addr)); bd < 0) {
@@ -39,7 +52,7 @@ int main(int argc, char const *argv[]) {
         printf("accept error %s\n", strerror(errno));
         continue;
       } else {
-        if (auto pid = fork(); pid == 0) { // child process
+        if (auto pid = fork(); pid == 0) {  // child process
           auto ticks = time(NULL);
           auto i = snprintf(buff, sizeof(buff), "%.24s\r\n", ctime(&ticks));
           assert(i != -1);
