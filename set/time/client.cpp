@@ -28,8 +28,20 @@ int main(int argc, char const *argv[]) {
     } else {
       printf("connected\n");
       char buf[256] = {0};
-      while (read(fd, buf, sizeof(buf)) > 0) {
-        printf("%s\n", buf);
+
+      for (;;) {
+        switch (auto rs = read(fd, buf, sizeof(buf)); rs) {
+          case 0:
+            printf("read 0, clinet will close.\n");
+            close(fd);
+            return 0;
+          case EOF:  // 不是叫做 EOF 就是 EOF 这与 FD 有关
+            printf("read EOF. clinet will close.\n");
+            return 0;
+            break;
+          default:
+            printf("%s\n", buf);
+        }
       }
     }
   }

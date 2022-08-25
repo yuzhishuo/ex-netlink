@@ -7,6 +7,7 @@
 #include <sys/socket.h>  // socket
 #include <time.h>        // ctime
 #include <unistd.h>      // write
+
 #include <thread>
 
 int main(int argc, char const *argv[]) {
@@ -58,7 +59,8 @@ int main(int argc, char const *argv[]) {
           assert(i != -1);
           auto write_size = write(cd, buff, sizeof(buff));
           assert(write_size == sizeof(buff));
-          std::this_thread::sleep_for(std::chrono::seconds(10));
+          // std::this_thread::sleep_for(std::chrono::seconds(10));
+          shutdown(cd, SHUT_RDWR);
         }
       }
     }
