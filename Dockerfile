@@ -14,6 +14,10 @@ RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test
 
 RUN apt install -y gcc-11 g++-11 
 
+# net
+RUN apt install -y tcpdump \
+            iproute2
+
 RUN ln -s /usr/bin/gcc-11 /usr/bin/gcc && ln -s /usr/bin/g++-11 /usr/bin/g++
 
 RUN apt install -y gdb make clang-format git
