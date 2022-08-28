@@ -5,3 +5,7 @@ add_executable(tcp_rest2 main2.cpp)
 target_link_libraries(
     tcp_rest2 pthread
 )
+add_executable(tcp_rest3 main3.cpp)
+target_link_libraries(
+    tcp_rest3 pthread
+)
