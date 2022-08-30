@@ -1,6 +1,8 @@
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -17,6 +19,17 @@ using namespace std;
 condition_variable cv;
 mutex mt;
 atomic_bool ck = {false};
+
+void sig_urg(int sig) { printf("generator urg sig/n"); }
+
+void addsig(int sig, void (*sig_handler)(int)) {
+  struct sigaction sa;
+  memset(&sa, '\0', sizeof(sa));
+  sa.sa_handler = sig_handler;
+  sa.sa_flags |= SA_RESTART;
+  sigfillset(&sa.sa_mask);
+  sigaction(sig, &sa, NULL);
+}
 
 void server() {
   auto fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -45,14 +58,22 @@ void server() {
     if (connectfd == -1) {
       printf("create accept connectfd err: %s \n", strerror(errno));
     }
+    addsig(SIGURG, sig_urg);
 
+    fcntl(connectfd, F_SETOWN, getpid());
     char buf[1024] = {0};
     if (auto e = recv(connectfd, buf, sizeof(buf), 0); e == -1) {
       printf("recv err: %s \n", strerror(errno));
     }
 
     printf("recv msg : %s\n", buf);
-    // close(connectfd);
+
+    if (auto e = recv(connectfd, buf, sizeof(buf), MSG_OOB); e == -1) {
+      printf("recv err: %s \n", strerror(errno));
+    }
+
+    printf("recv msg : %s\n", buf);
+    close(connectfd);
   }
 }
 
@@ -89,8 +110,6 @@ void client() {
     close(fd);
   } else {
     printf("create connect err: %s \n", strerror(errno));
-  }
-  while (1) {
   }
 }
 
