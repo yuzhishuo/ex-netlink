@@ -52,7 +52,7 @@ void server() {
     }
 
     printf("recv msg : %s\n", buf);
-    close(connectfd);
+    // close(connectfd);
   }
 }
 
@@ -86,9 +86,11 @@ void client() {
     if (auto se = send(fd, buf, sizeof(buf), MSG_OOB); se == -1) {
       printf("create send err: %s \n", strerror(errno));
     }
-    // close(fd);
+    close(fd);
   } else {
     printf("create connect err: %s \n", strerror(errno));
+  }
+  while (1) {
   }
 }
 
