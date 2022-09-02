@@ -9,9 +9,43 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "echo.common.h"
+
+void sigchild_handle(int) {
+  int pid, process_res;
+  while (pid = waitpid(-1, &process_res, WNOHANG) > 0) {
+    printf("handle subprocess %d\n", pid);
+    fflush(stdout);
+  }
+}
+
+using sighandler_t = void (*)(int);
+
+sighandler_t signal_t(int s, sighandler_t hanler) {
+  struct sigaction act;
+
+  sigemptyset(&act.sa_mask);
+  act.sa_flags = 0;
+  act.sa_handler = hanler;
+  if (s == SIGALRM) {
+#ifdef SA_INTERRUPT
+    act.sa_flags |= SA_INTERRUPT;
+#endif
+  } else {
+#ifdef SA_RESTART
+    act.sa_flags |= SA_RESTART;
+#endif
+  }
+  struct sigaction ract;
+  bzero(&ract, sizeof(struct sigaction));
+  if (sigaction(s, &act, &ract) != 0) {
+    return SIG_ERR;
+  }
+  return ract.sa_handler;
+}
 
 int create_fifo() {
   if (access(NAMEDPIPENAME, F_OK) != 0) {
@@ -39,6 +73,7 @@ int main(int argc, char const *argv[]) {
 
   sigprocmask(SIG_BLOCK, &sigs, nullptr);
 
+  signal_t(SIGCHLD, sigchild_handle);
   auto fifo_fd = create_fifo();
   int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -73,7 +108,7 @@ int main(int argc, char const *argv[]) {
         int n = 0;
         char buf[1024] = {0};
       again:
-        while (n = recv(connected_fd, buf, sizeof(buf), 0)) {
+        while (n = read(connected_fd, buf, sizeof(buf))) {
           send(connected_fd, buf, n, 0);
         }
 
@@ -81,6 +116,7 @@ int main(int argc, char const *argv[]) {
           goto again;
         } else {
           perror("recv error :");
+          close(connected_fd);
           exit(-1);
         }
       }
