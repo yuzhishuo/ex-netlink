@@ -92,11 +92,11 @@ int main(int argc, char const *argv[]) {
     exit(-1);
   }
 
-  int notify[1] = {1};
-  if (auto e = write(fifo_fd, notify, sizeof(notify)); e < 0) {
-    perror("write fifo error :");
-    exit(-1);
-  }
+  // int notify[1] = {1};
+  // if (auto e = write(fifo_fd, notify, sizeof(notify)); e < 0) {
+  //   perror("write fifo error :");
+  //   exit(-1);
+  // }
 
   while (1) {
     if (auto connected_fd = accept(sock_fd, nullptr, nullptr);

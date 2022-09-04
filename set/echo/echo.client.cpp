@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -30,6 +31,11 @@ int main(int argc, char const *argv[]) {
     exit(-1);
   }
 
+#ifdef REDIRECT_STDIN
+  auto doc_fd = open(ECHOFILEPATH, O_RDONLY);
+  dup2(doc_fd, fileno(stdin));
+#endif
+
   struct sockaddr_in addr;
   bzero(&addr, sizeof(addr));
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -38,11 +44,6 @@ int main(int argc, char const *argv[]) {
   if (auto e = bind(sock_fd, (struct sockaddr *)&addr, sizeof(addr)); e != 0) {
     perror("bind error");
     exit(-1);
-  }
-
-  int buf[1] = {0};
-  while (read(pipo_fd, buf, sizeof(buf)) < 0) {
-    std::this_thread::yield();
   }
 
   bzero(&addr, sizeof(addr));
@@ -55,20 +56,41 @@ int main(int argc, char const *argv[]) {
     exit(-1);
   }
 
+  int stand_id_flag = 0;
+  fd_set set;
   char read_buf[1024] = {0};
-  while (fgets(read_buf, sizeof(read_buf), stdin) != NULL) {
-    if (send(sock_fd, read_buf, strlen(read_buf), 0) < 0) {
-      perror("send error");
-      exit(-1);
+
+  for (;;) {
+    if (stand_id_flag == 0) {
+      FD_SET(fileno(stdin), &set);
+    }
+    FD_SET(sock_fd, &set);
+
+    select(10, &set, nullptr, nullptr, 0);
+
+    if (FD_ISSET(fileno(stdin), &set)) {
+      bzero(read_buf, sizeof(read_buf));
+      if (fgets(read_buf, sizeof(read_buf), stdin) == nullptr) {
+        stand_id_flag = 1;
+        shutdown(sock_fd, SHUT_WR);
+        FD_CLR(fileno(stdin), &set);
+        continue;
+      }
+
+      if (write(sock_fd, read_buf, strlen(read_buf)) < 0) {
+        perror("send error");
+        exit(-1);
+      }
     }
 
-    bzero(read_buf, sizeof(read_buf));
-    if (read(sock_fd, read_buf, sizeof(read_buf)) < 0) {
-      perror("read error");
-      exit(-1);
+    if (FD_ISSET(sock_fd, &set)) {
+      bzero(read_buf, sizeof(read_buf));
+      if (read(sock_fd, read_buf, sizeof(read_buf)) == 0) {
+        perror("read error");
+        exit(-1);
+      }
+      fputs(read_buf, stdout);
     }
-    fputs(read_buf, stdout);
   }
-
   return 0;
 }
