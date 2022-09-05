@@ -2,6 +2,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#include <vector>
 
 #include "echo.common.h"
 
@@ -91,39 +94,53 @@ int main(int argc, char const *argv[]) {
     perror("listen error :");
     exit(-1);
   }
+  std::vector<struct pollfd> client_fds{1};
 
-  // int notify[1] = {1};
-  // if (auto e = write(fifo_fd, notify, sizeof(notify)); e < 0) {
-  //   perror("write fifo error :");
-  //   exit(-1);
-  // }
+  client_fds[0].fd = sock_fd;
+  client_fds[0].events = POLLRDNORM;
 
-  while (1) {
-    if (auto connected_fd = accept(sock_fd, nullptr, nullptr);
-        connected_fd < 0) {
-      perror("accept error :");
+  for (;;) {
+    auto n = poll(client_fds.data(), client_fds.size(), 1000);
+
+    if (n < 0) {
+      perror("poll error");
       exit(-1);
-    } else {
-      if (auto pid = fork(); pid == 0) {
-        int n = 0;
-        char buf[1024] = {0};
-      again:
-        while (n = read(connected_fd, buf, sizeof(buf))) {
-          send(connected_fd, buf, n, 0);
-        }
+    }
 
-        if (n < 0 && errno == EINTR) {
-          goto again;
-        } else {
-          perror("recv error :");
-          close(connected_fd);
-          exit(-1);
+    if (n == 0) {
+      continue;
+    }
+
+    if (client_fds[0].revents & POLLRDNORM) {
+      if (auto connected_fd = accept(sock_fd, nullptr, nullptr);
+          connected_fd < 0) {
+        perror("accept error :");
+        exit(-1);
+      } else {
+        struct pollfd fd;
+        fd.fd = connected_fd;
+        fd.events = POLLRDNORM | POLLERR;
+        client_fds.emplace_back(std::move(fd));
+      }
+    }
+
+    for (int i = 1; i < client_fds.size(); i++) {
+      if (auto connected_fd = client_fds[i].fd; connected_fd == -1) {
+        continue;
+      } else {
+        if (client_fds[i].revents & (POLLRDNORM | POLLERR)) {
+          char buf[1024] = {0};
+          if (auto n = read(connected_fd, buf, sizeof(buf)); n > 0) {
+            send(connected_fd, buf, n, 0);
+          } else if (n == 0) {
+            close(connected_fd);
+            client_fds[i].fd = -1;
+          } else if (n < 0) {
+            perror("read error");
+          }
         }
       }
-
-      close(connected_fd);
     }
   }
-
   return 0;
 }
