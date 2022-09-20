@@ -15,10 +15,11 @@ void ssleep(size_t m) {
   select(0, NULL, NULL, NULL, &val);
 }
 
-class Request {
+class Request : public std::enable_shared_from_this<Request> {
  public:
   Request();
   void print();
+  void register1();
   ~Request();
 
  private:
@@ -27,53 +28,66 @@ class Request {
 
 class Inventory {
  public:
-  void register1(Request *request) {
+  void register1(std::weak_ptr<Request> request) {
     std::unique_lock lock(mut_);
     obs_.emplace_back(request);
   }
-  void remove(Request *request) {
+  void remove(Request* request) {
     std::unique_lock lock(mut_);
-    std::erase_if(obs_, [&](Request *e) { return request == e; });  // c++ 20
+    std::erase_if(obs_, [&](std::weak_ptr<Request> e) {
+      if (auto r = e.lock(); r)
+        return request == r.get();
+      else {
+        return false;
+      }
+    });  // c++ 20
   }
   void printAll() const {
-    std::unique_lock lock(mut_);
-    for (auto e : obs_) {
-      e->print();
+    std::vector<std::weak_ptr<Request>> obs;
+
+    {
+      std::unique_lock lock(mut_);
+      obs = obs_;
+    }
+    for (auto e : obs) {
+      if (auto r = e.lock(); r) r->print();
     }
   }
 
  private:
   mutable std::mutex mut_;
-  std::vector<Request *> obs_;
+  std::vector<std::weak_ptr<Request>> obs_;
 };
 
 Inventory inventory;
 
-Request::Request() {
-  std::unique_lock lock(mut_);
-  inventory.register1(this);
-}
+Request::Request() {}
 
 void Request::print() {
   std::unique_lock lock(mut_);
   char buf[] = "Request\n";
-  write(STDIN_FILENO, buf, sizeof(buf));
+  write(STDOUT_FILENO, buf, sizeof(buf));
+}
+
+void Request::register1() {
+  std::unique_lock lock(mut_);
+  inventory.register1(weak_from_this());
 }
 
 Request::~Request() {
   std::unique_lock lock(mut_);
-  ssleep(5);
   inventory.remove(this);
 }
 
-int main(int argc, char const *argv[]) {
-  Request e;
+int main(int argc, char const* argv[]) {
+  auto e = std::make_shared<Request>();
+  e->register1();
   std::thread t([&]() {
     ssleep(2);
     inventory.printAll();
   });
-  e.~Request();
-  t.join();
 
+  e->~Request();
+  t.join();
   return 0;
 }
