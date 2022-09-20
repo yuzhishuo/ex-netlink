@@ -1,3 +1,5 @@
+#include "rtt_server.h"
+
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
@@ -13,6 +15,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -67,16 +70,7 @@ class RttServer final {
           perror("accept error");
           return -1;
         }
-        auto fd_itr = std::find_if(fds.begin(), fds.end(), [](const auto &pfd) {
-          return pfd.fd == -1;
-        });
-        if (fd_itr != fds.end()) {
-          fd_itr->fd = connected_fd;
-          fd_itr->events = POLLIN | POLLOUT;
-        } else {
-          fds.push_back(pollfd{
-              .fd = connected_fd, .events = POLLIN | POLLERR, .revents = 0});
-        }
+        onNewConnect(connected_fd);
       }
 
       for (size_t i = 1; i < fds.size(); i++) {
@@ -93,20 +87,31 @@ class RttServer final {
 
           if (rs == 0) {
             shutdown(connected_fd, SHUT_RDWR);
-            fds[i].fd = -1;
-            bzero(&fds[i].events, sizeof(fds[i].events));
+            dispose(i);
             continue;
           }
 
           pkg.s_recv_ts = timeval2ui64(val);
-          gettimeofday(&val, nullptr);
-          pkg.s_send_ts = timeval2ui64(val);
-
-          write(connected_fd, &pkg, sizeof(rtt_package));
+          translation_add_data(translations_[connected_fd], pkg);
+          fds[i].events |= POLLOUT;
+          fds[i].events &= ~POLLIN;
         }
 
         if (fds[i].revents & POLLOUT) {
           printf("connected fd [%d] gennerates POLLOUT event.\n", connected_fd);
+          auto *pkg =
+              translation_get_data<rtt_package>(translations_[connected_fd]);
+          if (pkg == nullptr) {
+            printf("prase user data fail");
+          }
+          struct timeval val;
+          gettimeofday(&val, nullptr);
+          pkg->s_send_ts = timeval2ui64(val);
+          write(connected_fd, pkg, sizeof(rtt_package));
+
+          shutdown(connected_fd, SHUT_RDWR);
+
+          dispose(i);
         }
 
         if (fds[i].revents & POLLERR) {
@@ -118,18 +123,44 @@ class RttServer final {
           if (e == EINTR) {
             continue;
           }
+          dispose(i);
           return -1;
         }
         fd_size--;
       }
     }
-
     return 0;
+  }
+
+  void dispose(int i) {
+    auto fd = fds[i].fd;
+    bzero(&fds[i].events, sizeof(fds[i].events));
+    translation_destory(translations_[fd]);
+    translations_.erase(fd);
+    fds[i].fd = -1;
+  }
+
+  void onNewConnect(int connected_fd) {
+    auto fd_itr = std::find_if(fds.begin(), fds.end(),
+                               [](const auto &pfd) { return pfd.fd == -1; });
+    if (fd_itr != fds.end()) {
+      fd_itr->fd = connected_fd;
+      fd_itr->events = POLLIN | POLLERR;
+    } else {
+      fds.push_back(
+          pollfd{.fd = connected_fd, .events = POLLIN | POLLERR, .revents = 0});
+    }
+
+    assert(!translations_.contains(connected_fd));
+    Translation transaction;
+    translation_init(transaction, connected_fd);
+    translations_.emplace(connected_fd, transaction);
   }
 
  private:
   int sock_fd_;
   std::vector<struct pollfd> fds;
+  std::map<int, Translation, std::less<>> translations_;
 };
 
 int main(int argc, char const *argv[]) {
