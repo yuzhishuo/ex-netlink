@@ -1,4 +1,4 @@
-project(process_poll VERSION 0.0.0)
+project(process_poll VERSION 0.0.1)
 
 add_executable(
     ${PROJECT_NAME} main.cpp
