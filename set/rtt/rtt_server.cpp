@@ -39,7 +39,12 @@ class RttServer final {
 
     int fl = 1;
     setsockopt(sock_fd_, IPPROTO_TCP, TCP_NODELAY, &fl, sizeof(int));
-
+    if (auto flag = fcntl(sock_fd_, F_GETFL, 0); flag >= 0) {
+      flag |= O_NONBLOCK;
+      fcntl(sock_fd_, F_SETFL, flag);
+    } else {
+      perror("fcntl error");
+    }
     struct sockaddr_in peer_addr;
     peer_addr.sin_family = AF_INET;
     peer_addr.sin_port = htons(9966);
@@ -48,6 +53,7 @@ class RttServer final {
       perror("ip is seted fail");
       return -1;
     }
+
     if (bind(sock_fd_, (struct sockaddr *)&peer_addr, sizeof(peer_addr)) < 0) {
       perror("bind fail");
       return -1;
@@ -67,15 +73,32 @@ class RttServer final {
         auto connected_fd = accept(fd, nullptr, nullptr);
 
         if (connected_fd < 0) {
-          perror("accept error");
-          return -1;
+          if (connected_fd != EAGAIN) {
+            perror("accept error");
+            return -1;
+          }
+        } else {
+          if (auto flag = fcntl(connected_fd, F_GETFL, 0); flag >= 0) {
+            if (flag | O_NONBLOCK) {
+              printf("connect fd inhert listen sock noblock attribute\n");
+            } else {
+              printf("connect fd can't inhert listen sock noblock attribute\n");
+            }
+          }
+          onNewConnect(connected_fd);
         }
-        onNewConnect(connected_fd);
       }
 
       for (size_t i = 1; i < fds.size(); i++) {
         if (fds[i].fd == -1) continue;
         if (fd_size <= 0) break;
+
+        if (fds[i].revents & POLLERR || fds[i].revents & POLLIN ||
+            fds[i].revents & POLLOUT) {
+          fd_size--;
+        } else {
+          continue;
+        }
 
         auto connected_fd = fds[i].fd;
         if (fds[i].revents & POLLIN) {
@@ -86,9 +109,11 @@ class RttServer final {
           auto rs = read(connected_fd, &pkg, sizeof(rtt_package));
 
           if (rs == 0) {
-            shutdown(connected_fd, SHUT_RDWR);
-            dispose(i);
-            continue;
+            if (rs != EAGAIN) {
+              shutdown(connected_fd, SHUT_RDWR);
+              dispose(i);
+              continue;
+            }
           }
 
           pkg.s_recv_ts = timeval2ui64(val);
@@ -107,11 +132,17 @@ class RttServer final {
           struct timeval val;
           gettimeofday(&val, nullptr);
           pkg->s_send_ts = timeval2ui64(val);
-          write(connected_fd, pkg, sizeof(rtt_package));
+          auto wr_num = write(connected_fd, pkg, sizeof(rtt_package));
 
-          shutdown(connected_fd, SHUT_RDWR);
-
-          dispose(i);
+          if (wr_num < 0) {
+            if (errno != EWOULDBLOCK) {
+              shutdown(connected_fd, SHUT_RDWR);
+              dispose(i);
+            }
+          } else {
+            shutdown(connected_fd, SHUT_RDWR);
+            dispose(i);
+          }
         }
 
         if (fds[i].revents & POLLERR) {
@@ -126,7 +157,6 @@ class RttServer final {
           dispose(i);
           return -1;
         }
-        fd_size--;
       }
     }
     return 0;

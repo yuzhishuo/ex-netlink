@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <iostream>
 #include <string>
 #include <utility>
 
@@ -21,7 +22,8 @@ class RttClient {
     assert(sock_fd_ > 0);
   }
 
-  std::pair<uint64_t, uint64_t> Connect(const std::string& ip, uint16_t port) {
+  auto Connect(const std::string& ip, uint16_t port)
+      -> std::pair<uint64_t, int64_t> {
     if (sock_fd_ < 0) {
       perror("create socket fail");
       return {-1, -1};
@@ -60,9 +62,15 @@ class RttClient {
     gettimeofday(&val, nullptr);
     uint64_t recv_time = timeval2ui64(val);
 
-    return {
-        ((recv_time - pck.c_send_ts) - (pck.s_send_ts - pck.s_recv_ts)),
-        ((recv_time + pck.c_send_ts) - (pck.s_send_ts + pck.s_recv_ts)) / 2};
+    std::cout << "c send time " << pck.c_send_ts << std::endl;
+    std::cout << "s recv time " << pck.s_recv_ts << std::endl;
+    std::cout << "s send time " << pck.s_send_ts << std::endl;
+    std::cout << "c recv time " << recv_time << std::endl;
+
+    auto a = recv_time - pck.s_send_ts;
+    auto b = pck.s_recv_ts - pck.c_send_ts;
+    return {((recv_time - pck.c_send_ts) - (pck.s_send_ts - pck.s_recv_ts)),
+            (std::max(a, b) - std::min(a, b)) / 2};
   }
 
  private:
