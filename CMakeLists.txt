@@ -23,6 +23,7 @@ configure_file(
 add_subdirectory(${PROJECT_SOURCE_DIR}/include)
 
 set(INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include")
+set(SET_DIR "${PROJECT_SOURCE_DIR}/set")
 include_directories(${INCLUDE_DIR})
 # aux_source_directory(${PROJECT_SOURCE_DIR}/src DIR_SRCS)
 

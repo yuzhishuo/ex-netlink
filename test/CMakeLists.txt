@@ -12,6 +12,9 @@ FetchContent_MakeAvailable(googletest)
 aux_source_directory(${unit_test_SOURCE_DIR} UNIT_TEST_SRCS )
 include_directories(${INCLUDE_DIR})
 
+
+add_subdirectory(buffer)
+
 add_executable(
     ${PROJECT_NAME} ${UNIT_TEST_SRCS} ${DIR_SRCS}
 )
