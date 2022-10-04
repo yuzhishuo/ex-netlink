@@ -6,6 +6,8 @@
 #include <string.h>
 
 #include <algorithm>
+#include <bitset>
+#include <iostream>
 #include <utility>
 
 #include "yendian.h"
@@ -79,10 +81,10 @@ class circulation_buffer {
       if (re_size > sizeof(T)) {
         ::memcpy(&be16, peek(), sizeof(T));
       } else {
-        T l, r;
+        T l{}, r{};
         ::memcpy(&l, peek(), re_size);
         ::memcpy(&r, buf_, sizeof(T) - re_size);
-        be16 = l << re_size + r;
+        be16 = l + (r << (re_size * 8));
       }
     } else {
       assert(writeindex_ - readindex_ >= sizeof(T));

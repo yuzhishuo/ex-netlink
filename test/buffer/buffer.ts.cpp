@@ -1,6 +1,7 @@
 
 #include <buffer.h>
 
+#include <bitset>
 #include <iostream>
 int main(int argc, char const *argv[]) {
   luluyuzhi::circulation_buffer buff(20);
@@ -24,10 +25,21 @@ int main(int argc, char const *argv[]) {
   buff.append("1234567890", 10);
 
   buff.append("4321", 4);
+
+  buff.skip(6);
+
+  uint64_t t1 = 0;
+  char tm[] = "56789043";
+  ::memcpy(&t1, tm, sizeof(uint64_t));
+  std::cout << std::bitset<sizeof(uint64_t) * 8>(t1) << std::endl;
+  auto b2 = luluyuzhi::network2host<uint64_t>(t1);
+  auto c3 = buff.peek<uint64_t>();
+
+  assert(c3 == b2);
+
   buff.append("4321", 4);
 
   buff.skip(10);
 
-  
   return 0;
 }
