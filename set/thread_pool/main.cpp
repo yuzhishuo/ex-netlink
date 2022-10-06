@@ -12,7 +12,6 @@ int main(int argc, char const *argv[]) {
       std::cout << i << std::endl;
     });
 
-  std::this_thread::sleep_for(3s);
   tp.stop();
   return 0;
 }

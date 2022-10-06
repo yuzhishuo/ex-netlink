@@ -16,7 +16,7 @@ class thread_pool {
     for (size_t i = 0; i < 4; i++) {
       trds_.emplace_back([_d = data_]() {
         try {
-          while (!_d->stoped) {
+          while (true) { // while (_d->stoped) { // why not here?
             std::function<void()> ts;
             std::unique_lock<std::mutex> lock(_d->mut_);
             if (!_d->task.empty()) {
@@ -28,7 +28,8 @@ class thread_pool {
               } catch (...) {
                 std::cout << "generate error" << std::endl;
               }
-
+            } else if (_d->stoped) { // Attent code location
+              break;
             } else {
               _d->cond_.wait(lock);
             }
@@ -53,14 +54,17 @@ class thread_pool {
 
   void stop() {
     if (data_) {
-      data_->stoped = true;
+      {
+        std::unique_lock<std::mutex> lock(data_->mut_);
+        data_->stoped = true;
+      }
       data_->cond_.notify_all();
     }
   }
 
  private:
   struct data {
-    std::atomic_bool stoped = false;
+    bool stoped = false;
     std::deque<std::function<void()>> task;
     std::mutex mut_;
     std::condition_variable cond_;
