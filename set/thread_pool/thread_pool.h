@@ -10,13 +10,24 @@
 #include <thread>
 #include <vector>
 
+class ythread : public std::thread {
+ public:
+  using std::thread::thread;
+  using std::thread::operator=;
+  ythread(const ythread&) = delete;
+  ythread(ythread&&) = default;
+  ~ythread() {
+    if (joinable()) join();
+  }
+};
+
 class thread_pool {
  public:
   thread_pool() : data_{std::make_shared<data>()} {
     for (size_t i = 0; i < 4; i++) {
       trds_.emplace_back([_d = data_]() {
         try {
-          while (true) { // while (_d->stoped) { // why not here?
+          while (true) {  // while (_d->stoped) { // why not here?
             std::function<void()> ts;
             std::unique_lock<std::mutex> lock(_d->mut_);
             if (!_d->task.empty()) {
@@ -28,7 +39,7 @@ class thread_pool {
               } catch (...) {
                 std::cout << "generate error" << std::endl;
               }
-            } else if (_d->stoped) { // Attent code location
+            } else if (_d->stoped) {  // Attent code location
               break;
             } else {
               _d->cond_.wait(lock);
@@ -38,7 +49,6 @@ class thread_pool {
           std::cout << "generr" << std::endl;
         }
       });
-      std::cout << trds_.back().joinable() << std::endl;
     }
   }
 
@@ -46,8 +56,8 @@ class thread_pool {
 
   void push(std::function<void()>&& ts) {
     {
-      std::unique_lock<std::mutex> lock(data_->mut_);
-      data_->task.emplace_back(ts);
+      std::lock_guard<std::mutex> lock(data_->mut_);
+      data_->task.emplace_back(std::move(ts));
     }
     data_->cond_.notify_one();
   }
@@ -55,7 +65,7 @@ class thread_pool {
   void stop() {
     if (data_) {
       {
-        std::unique_lock<std::mutex> lock(data_->mut_);
+        std::lock_guard<std::mutex> lock(data_->mut_);
         data_->stoped = true;
       }
       data_->cond_.notify_all();
@@ -69,7 +79,7 @@ class thread_pool {
     std::mutex mut_;
     std::condition_variable cond_;
   };
-  std::vector<std::jthread> trds_;
+  std::vector<ythread> trds_;
   std::shared_ptr<data> data_;
 };
 
