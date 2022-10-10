@@ -15,7 +15,11 @@ class ythread : public std::thread {
   using std::thread::thread;
   using std::thread::operator=;
   ythread(const ythread&) = delete;
-  ythread(ythread&&) = default;
+  ythread(ythread&& _t) {
+    static_assert(sizeof(ythread) == sizeof(std::thread),
+                  "require ythread shouldn't contain other data membership");
+    swap(_t);
+  }
   ~ythread() {
     if (joinable()) join();
   }
@@ -31,7 +35,7 @@ class thread_pool {
             std::function<void()> ts;
             std::unique_lock<std::mutex> lock(_d->mut_);
             if (!_d->task.empty()) {
-              ts = _d->task.front();
+              ts = std::move(_d->task.front());
               _d->task.pop_front();
               lock.unlock();
               try {
