@@ -9,6 +9,9 @@
 #include <any>
 #include <functional>
 
+#include<buffer.h>
+#include"rtt_common.h"
+
 using onConnect = void (*)(std::any* user_data);
 
 enum class TranslationState { UNKNOW, CONNECTTING, CONNECTED, STOP };
@@ -16,28 +19,19 @@ enum class TranslationState { UNKNOW, CONNECTTING, CONNECTED, STOP };
 struct Translation {
   int fd_;
   TranslationState state_;
-  std::any data_;
+  luluyuzhi::circulation_buffer rbuffer = std::move(luluyuzhi::circulation_buffer{3 * sizeof(rtt_package)});
+  luluyuzhi::circulation_buffer wbuffer = std::move(luluyuzhi::circulation_buffer{3 * sizeof(rtt_package)});
 };
 
-bool translation_init(Translation& translation, int fd) {
-  translation = std::move(Translation{
-      .fd_ = fd,
-      .state_ = TranslationState::CONNECTED,
-  });
-}
-
-template <typename T>
-void translation_add_data(Translation& translation, T data) {
-  translation.data_ = std::move(data);
-}
-
-template <typename T>
-T* translation_get_data(Translation& translation) {
-  return std::any_cast<T>(&translation.data_);
+void translation_init(Translation& translation, int fd) {
+  translation.fd_ = fd;
+  translation.state_ = TranslationState::CONNECTED;
 }
 
 void translation_destory(Translation& translation) {
-  translation = std::move(Translation{});
+  translation.fd_ = -1;
+  translation.rbuffer.retrieve_all();
+  translation.wbuffer.retrieve_all();
 }
 
 #endif  // EXNETLINK_RTT_RTTSERVER

@@ -14,7 +14,7 @@
 
 namespace luluyuzhi {
 
-class circulation_buffer {
+class circulation_buffer final{
  public:
   constexpr static size_t padding = 4;
   explicit circulation_buffer(size_t length)
@@ -23,12 +23,36 @@ class circulation_buffer {
         readindex_{padding},
         writeindex_{padding} {}
 
-  ~circulation_buffer() {
+  ~circulation_buffer()
+  {
     delete[] buf_;
+    buf_ = nullptr;
     length_ = 0;
     readindex_ = padding;
     writeindex_ = padding;
   }
+  circulation_buffer& operator=(circulation_buffer& ot) =delete;
+  circulation_buffer(circulation_buffer& ot) = delete;
+  circulation_buffer(circulation_buffer&& ot)
+  {
+    this->buf_ = ot.buf_;
+    this->length_ = ot.length_;
+    this->readindex_ = ot.readindex_;
+    this->writeindex_ = ot.writeindex_;
+    ot.buf_ = nullptr;
+  }
+
+
+  circulation_buffer& operator=(circulation_buffer&& ot)
+  {
+    this->buf_ = ot.buf_;
+    this->length_ = ot.length_;
+    this->readindex_ = ot.readindex_;
+    this->writeindex_ = ot.writeindex_;
+    ot.buf_ = nullptr;
+    return *this;
+  }
+
 
   size_t readed_size() const {
     return writeindex_ < readindex_ ? length_ - readindex_ + writeindex_
@@ -164,4 +188,4 @@ class circulation_buffer {
 
 };  // namespace luluyuzhi
 
-#endif
+#endif // LULUYUZHI_EXNETLINK_BUFFER_H

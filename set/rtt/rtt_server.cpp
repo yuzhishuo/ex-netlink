@@ -102,13 +102,11 @@ class RttServer final {
 
         auto connected_fd = fds[i].fd;
         if (fds[i].revents & POLLIN) {
-          rtt_package pkg;
+          uint8_t buff[1024];
+          auto rs = read(connected_fd, &buff, sizeof(buff));
 
-          struct timeval val;
-          gettimeofday(&val, nullptr);
-          auto rs = read(connected_fd, &pkg, sizeof(rtt_package));
-
-          if (rs == 0) {
+          if (rs <= 0) {
+            perror("read fail");
             if (rs != EAGAIN) {
               shutdown(connected_fd, SHUT_RDWR);
               dispose(i);
@@ -116,32 +114,70 @@ class RttServer final {
             }
           }
 
+          translations_[connected_fd].rbuffer.append(buff, rs);
+          if (translations_[connected_fd].rbuffer.readed_size() <
+              sizeof(rtt_package)) {
+            fds[i].events |= POLLIN;
+            continue;
+          }
+          struct timeval val;
+          gettimeofday(&val, nullptr);
+          // copy
+          rtt_package pkg = *reinterpret_cast<rtt_package *>(
+              translations_[connected_fd].rbuffer.peek());
+
           pkg.s_recv_ts = timeval2ui64(val);
-          translation_add_data(translations_[connected_fd], pkg);
-          fds[i].events |= POLLOUT;
-          fds[i].events &= ~POLLIN;
+          gettimeofday(&val, nullptr);
+          pkg.s_send_ts = timeval2ui64(val);
+          auto ws = write(connected_fd, reinterpret_cast<void *>(&pkg),
+                          sizeof(rtt_package));
+          if (ws <= 0) {
+            perror("write fail");
+            if (errno == EAGAIN) {
+              translations_[connected_fd].wbuffer.append(
+                  reinterpret_cast<uint8_t *>(&pkg), sizeof(rtt_package) - ws);
+              fds[i].events |= POLLOUT;
+              fds[i].events &= ~POLLIN;
+            } else {
+              assert(0);
+            }
+          }
+
+          if (ws < sizeof(rtt_package)) {
+            uint8_t *data;
+            data = reinterpret_cast<uint8_t *>(&pkg) + ws;
+            translations_[connected_fd].wbuffer.append(
+                data, sizeof(rtt_package) - ws);
+            fds[i].events |= POLLOUT;
+            fds[i].events &= ~POLLIN;
+          }
         }
 
         if (fds[i].revents & POLLOUT) {
           printf("connected fd [%d] gennerates POLLOUT event.\n", connected_fd);
-          auto *pkg =
-              translation_get_data<rtt_package>(translations_[connected_fd]);
-          if (pkg == nullptr) {
-            printf("prase user data fail");
-          }
-          struct timeval val;
-          gettimeofday(&val, nullptr);
-          pkg->s_send_ts = timeval2ui64(val);
-          auto wr_num = write(connected_fd, pkg, sizeof(rtt_package));
+
+          auto &connect = translations_[connected_fd];
+          auto &wbuff = connect.wbuffer;
+
+          auto wr_num = write(connected_fd, wbuff.peek(), wbuff.readed_size());
 
           if (wr_num < 0) {
             if (errno != EWOULDBLOCK) {
               shutdown(connected_fd, SHUT_RDWR);
               dispose(i);
+            } else {
+              fds[i].events |= POLLOUT;
+              fds[i].events &= ~POLLIN;
             }
           } else {
-            shutdown(connected_fd, SHUT_RDWR);
-            dispose(i);
+            if (wr_num == wbuff.readed_size()) {
+              shutdown(connected_fd, SHUT_RDWR);
+              dispose(i);
+            } else {
+              wbuff.skip(wr_num);
+              fds[i].events |= POLLOUT;
+              fds[i].events &= ~POLLIN;
+            }
           }
         }
 
@@ -165,7 +201,6 @@ class RttServer final {
   void dispose(int i) {
     auto fd = fds[i].fd;
     bzero(&fds[i].events, sizeof(fds[i].events));
-    translation_destory(translations_[fd]);
     translations_.erase(fd);
     fds[i].fd = -1;
   }
@@ -184,7 +219,7 @@ class RttServer final {
     assert(!translations_.contains(connected_fd));
     Translation transaction;
     translation_init(transaction, connected_fd);
-    translations_.emplace(connected_fd, transaction);
+    translations_.emplace(connected_fd, std::move(transaction));
   }
 
  private:
