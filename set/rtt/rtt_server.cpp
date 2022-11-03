@@ -45,6 +45,9 @@ class RttServer final {
     } else {
       perror("fcntl error");
     }
+    
+    setsockopt(sock_fd_, SOL_SOCKET, SO_REUSEADDR, &fl, sizeof(int));
+    
     struct sockaddr_in peer_addr;
     peer_addr.sin_family = AF_INET;
     peer_addr.sin_port = htons(9966);
@@ -115,6 +118,7 @@ class RttServer final {
           }
 
           translations_[connected_fd].rbuffer.append(buff, rs);
+          // 此时就已经进入业务逻辑了
           if (translations_[connected_fd].rbuffer.readed_size() <
               sizeof(rtt_package)) {
             fds[i].events |= POLLIN;
@@ -123,12 +127,20 @@ class RttServer final {
           struct timeval val;
           gettimeofday(&val, nullptr);
           // copy
-          rtt_package pkg = *reinterpret_cast<rtt_package *>(
-              translations_[connected_fd].rbuffer.peek());
+          rtt_package pkg {};
 
-          pkg.s_recv_ts = timeval2ui64(val);
+          pkg.c_send_ts = translations_[connected_fd].rbuffer.peek<uint64_t>();
+          translations_[connected_fd].rbuffer.skip(sizeof(uint64_t));
+          pkg.s_recv_ts = translations_[connected_fd].rbuffer.peek<uint64_t>();
+          translations_[connected_fd].rbuffer.skip(sizeof(uint64_t));
+          pkg.s_send_ts =  translations_[connected_fd].rbuffer.peek<uint64_t>(),
+          translations_[connected_fd].rbuffer.skip(sizeof(uint64_t));
+          
+          
+          pkg.c_send_ts = luluyuzhi::host2network(pkg.c_send_ts);
+          pkg.s_recv_ts = luluyuzhi::host2network(timeval2ui64(val));
           gettimeofday(&val, nullptr);
-          pkg.s_send_ts = timeval2ui64(val);
+          pkg.s_send_ts = luluyuzhi::host2network(timeval2ui64(val));
           auto ws = write(connected_fd, reinterpret_cast<void *>(&pkg),
                           sizeof(rtt_package));
           if (ws <= 0) {
@@ -155,7 +167,7 @@ class RttServer final {
 
         if (fds[i].revents & POLLOUT) {
           printf("connected fd [%d] gennerates POLLOUT event.\n", connected_fd);
-
+          // 此时就已经进入业务逻辑了
           auto &connect = translations_[connected_fd];
           auto &wbuff = connect.wbuffer;
 
@@ -182,6 +194,7 @@ class RttServer final {
         }
 
         if (fds[i].revents & POLLERR) {
+          // 非业务逻辑
           int e;
           socklen_t len;
           getsockopt(connected_fd, SOL_SOCKET, SO_ERROR, &e, &len);

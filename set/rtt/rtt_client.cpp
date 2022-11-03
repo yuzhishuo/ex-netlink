@@ -8,10 +8,11 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-
+#include <buffer.h>
 #include <iostream>
 #include <string>
 #include <utility>
+#include <yendian.h>
 
 #include "rtt_common.h"
 
@@ -50,7 +51,7 @@ class RttClient {
 
     gettimeofday(&val, nullptr);
 
-    rtt_package pck = {.c_send_ts = timeval2ui64(val)};
+    rtt_package pck = {.c_send_ts = luluyuzhi::host2network(timeval2ui64(val))};
 
     auto write_size = write(sock_fd_, (void*)&pck, sizeof(rtt_package));
     assert(write_size == sizeof(rtt_package));
@@ -62,6 +63,10 @@ class RttClient {
     gettimeofday(&val, nullptr);
     uint64_t recv_time = timeval2ui64(val);
 
+    pck.s_recv_ts = luluyuzhi::network2host(pck.s_recv_ts);
+    pck.c_send_ts = luluyuzhi::network2host(pck.c_send_ts);
+    pck.s_send_ts = luluyuzhi::network2host(pck.s_send_ts);
+    
     std::cout << "c send time " << pck.c_send_ts << std::endl;
     std::cout << "s recv time " << pck.s_recv_ts << std::endl;
     std::cout << "s send time " << pck.s_send_ts << std::endl;
