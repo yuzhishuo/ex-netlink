@@ -20,34 +20,20 @@
 #include <vector>
 
 #include "rtt_common.h"
+namespace luluyuzhi {
 
 class RttServer final {
  public:
   RttServer() {
-    sock_fd_ = socket(AF_INET, SOCK_STREAM, 0);
-    assert(sock_fd_ > 0);
+    sock_fd_ = net::createSocket();
 
     fds.push_back(
         pollfd{.fd = sock_fd_, .events = POLLIN | POLLERR, .revents = 0});
   }
 
   int startDomain() & {
-    if (sock_fd_ < 0) {
-      perror("create socket fail");
-      return -1;
-    }
-
-    int fl = 1;
-    setsockopt(sock_fd_, IPPROTO_TCP, TCP_NODELAY, &fl, sizeof(int));
-    if (auto flag = fcntl(sock_fd_, F_GETFL, 0); flag >= 0) {
-      flag |= O_NONBLOCK;
-      fcntl(sock_fd_, F_SETFL, flag);
-    } else {
-      perror("fcntl error");
-    }
-    
-    setsockopt(sock_fd_, SOL_SOCKET, SO_REUSEADDR, &fl, sizeof(int));
-    
+    net::setSocketNotBlock(sock_fd_);
+    net::setAddressReuse(sock_fd_);
     struct sockaddr_in peer_addr;
     peer_addr.sin_family = AF_INET;
     peer_addr.sin_port = htons(9966);
@@ -127,16 +113,15 @@ class RttServer final {
           struct timeval val;
           gettimeofday(&val, nullptr);
           // copy
-          rtt_package pkg {};
+          rtt_package pkg{};
 
           pkg.c_send_ts = translations_[connected_fd].rbuffer.peek<uint64_t>();
           translations_[connected_fd].rbuffer.skip(sizeof(uint64_t));
           pkg.s_recv_ts = translations_[connected_fd].rbuffer.peek<uint64_t>();
           translations_[connected_fd].rbuffer.skip(sizeof(uint64_t));
-          pkg.s_send_ts =  translations_[connected_fd].rbuffer.peek<uint64_t>(),
+          pkg.s_send_ts = translations_[connected_fd].rbuffer.peek<uint64_t>(),
           translations_[connected_fd].rbuffer.skip(sizeof(uint64_t));
-          
-          
+
           pkg.c_send_ts = luluyuzhi::host2network(pkg.c_send_ts);
           pkg.s_recv_ts = luluyuzhi::host2network(timeval2ui64(val));
           gettimeofday(&val, nullptr);
@@ -241,6 +226,8 @@ class RttServer final {
   std::map<int, Translation, std::less<>> translations_;
 };
 
+}  // namespace luluyuzhi
+
 int main(int argc, char const *argv[]) {
-  return std::make_unique<RttServer>()->startDomain();
+  return std::make_unique<luluyuzhi::RttServer>()->startDomain();
 }
