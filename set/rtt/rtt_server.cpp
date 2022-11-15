@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <error.h>
 #include <fcntl.h>
+#include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,6 +16,8 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <any>
+#include <functional>
 #include <map>
 #include <memory>
 #include <vector>
@@ -22,10 +25,53 @@
 #include "rtt_common.h"
 namespace luluyuzhi {
 
+class Connector {
+ public:
+  Connector(int fd, struct sockaddr_storage addr) : fd_(fd), addr_{addr} {}
+
+ private:
+  int fd_;
+  struct sockaddr_storage addr_;
+  std::any data;
+};
+
+class Accept {
+ public:
+  std::shared_ptr<Connector> create(int fd) {
+    struct sockaddr_storage store;
+    socklen_t len = sizeof(struct sockaddr_storage);
+    int connect_fd;
+
+    if (auto cond =
+            net::accept(fd, (struct sockaddr *)&store, &len, connect_fd);
+        cond) {
+      net::hold_error_condition(cond);
+      return nullptr;
+    }
+    auto connector = std::make_shared<Connector>(connect_fd, store);
+    if (!connector) {
+      return nullptr;
+    }
+
+    if (on_new_connect_) {
+      on_new_connect_(connector);
+    }
+    return connector;
+  }
+
+  void setOnNewConnect(
+      std::function<void(std::shared_ptr<Connector> connector)> func) {
+    on_new_connect_ = std::move(func);
+  }
+
+ private:
+  std::function<void(std::shared_ptr<Connector> connector)> on_new_connect_;
+};
+
 class RttServer final {
  public:
   RttServer() {
-    sock_fd_ = net::createSocket();
+    net::createSocket(sock_fd_);
 
     fds.push_back(
         pollfd{.fd = sock_fd_, .events = POLLIN | POLLERR, .revents = 0});
@@ -48,7 +94,7 @@ class RttServer final {
       return -1;
     }
 
-    listen(sock_fd_, 10);
+    net::listen(sock_fd_, 10);
 
     for (;;) {
       auto fd_size = poll(fds.data(), fds.size(), -1);

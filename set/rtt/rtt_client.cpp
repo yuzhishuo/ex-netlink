@@ -23,7 +23,7 @@ namespace luluyuzhi {
 
 class RttClient {
  public:
-  RttClient() { sock_fd_ = net::createSocket(); }
+  RttClient() { net::createSocket(sock_fd_); }
 
   auto Connect(const std::string& ip, uint16_t port)
       -> std::pair<uint64_t, int64_t> {
@@ -36,7 +36,7 @@ class RttClient {
           std::error_code{errno, net_system_category::constructor()},
           "address phare fail");  // like perror
     }
-    
+
     net::connect(sock_fd_, &peer_addr);
 
     struct timeval val;
