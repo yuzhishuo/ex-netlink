@@ -81,9 +81,10 @@ int main(int argc, char const *argv[]) {
   int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 
   struct sockaddr_in addr;
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(1234);
-  addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+  if (!constructor_echo_addr(addr)) {
+    exit(-1);
+  }
 
   if (auto e = bind(sock_fd, (struct sockaddr *)&addr, sizeof(addr)); e != 0) {
     perror("bind error :");

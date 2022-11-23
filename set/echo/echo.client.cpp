@@ -47,9 +47,10 @@ int main(int argc, char const *argv[]) {
   }
 
   bzero(&addr, sizeof(addr));
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(1234);
+  if (!constructor_echo_addr(addr)) {
+    exit(-1);
+  }
+
   if (auto e = connect(sock_fd, (struct sockaddr *)&addr, sizeof(addr));
       e != 0) {
     perror("connect error");
