@@ -10,6 +10,13 @@
 
 #include <array>
 #include <vector>
+
+auto gettid()
+{
+  return (long int)syscall(224);
+}
+
+
 thread_local pid_t current_thread_id = gettid();
 
 class Billboard {

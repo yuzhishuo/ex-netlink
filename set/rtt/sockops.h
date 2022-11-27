@@ -13,6 +13,7 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include <functional>
 #include <algorithm>
 #include <string>
 #include <system_error>
