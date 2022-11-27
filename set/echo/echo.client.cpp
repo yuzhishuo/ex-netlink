@@ -41,6 +41,9 @@ int main(int argc, char const *argv[]) {
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
   addr.sin_family = AF_INET;
   addr.sin_port = htons(3344);
+  int one = 1;
+  setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+  setsockopt(sock_fd, SOL_SOCKET, SO_REUSEPORT, &one, sizeof(one));
   if (auto e = bind(sock_fd, (struct sockaddr *)&addr, sizeof(addr)); e != 0) {
     perror("bind error");
     exit(-1);
@@ -82,11 +85,18 @@ int main(int argc, char const *argv[]) {
         perror("send error");
         exit(-1);
       }
+      if (read_buf[0] == 'q') {
+        shutdown(sock_fd, SHUT_WR);
+      }
     }
 
     if (FD_ISSET(sock_fd, &set)) {
       bzero(read_buf, sizeof(read_buf));
-      if (read(sock_fd, read_buf, sizeof(read_buf)) == 0) {
+      if (auto e = read(sock_fd, read_buf, sizeof(read_buf)); e == 0) {
+        shutdown(sock_fd, SHUT_RDWR);
+        perror("peer close"); // should be annotated
+        exit(0);
+      } else if (e < 0) {
         perror("read error");
         exit(-1);
       }
