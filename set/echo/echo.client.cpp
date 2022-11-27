@@ -1,9 +1,11 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -13,6 +15,8 @@
 #include "echo.common.h"
 
 int main(int argc, char const *argv[]) {
+  sigignore(SIGPIPE);
+
   if (access(NAMEDPIPENAME, F_OK) != 0) {
     printf("access pip %s error", NAMEDPIPENAME);
   }
@@ -63,7 +67,7 @@ int main(int argc, char const *argv[]) {
   int stand_id_flag = 0;
   fd_set set;
   char read_buf[1024] = {0};
-
+  int count = 3;
   for (;;) {
     if (stand_id_flag == 0) {
       FD_SET(fileno(stdin), &set);
@@ -83,15 +87,17 @@ int main(int argc, char const *argv[]) {
 
       if (write(sock_fd, read_buf, strlen(read_buf)) < 0) {
         perror("send error");
-        exit(-1);
-      }
-      if (read_buf[0] == 'q') {
-        shutdown(sock_fd, SHUT_WR);
       }
     }
 
     if (FD_ISSET(sock_fd, &set)) {
       bzero(read_buf, sizeof(read_buf));
+      int bytes = 0;
+      ioctl(sock_fd, FIONREAD, &bytes);
+      if (!(count--) && bytes > 0) {
+        close(sock_fd);
+        break;
+      }
       if (auto e = read(sock_fd, read_buf, sizeof(read_buf)); e == 0) {
         shutdown(sock_fd, SHUT_RDWR);
         perror("peer close"); // should be annotated
