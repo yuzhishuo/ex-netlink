@@ -28,6 +28,8 @@ int main(int argc, char const *argv[]) {
     exit(-1);
   }
 
+reconnect:
+
   auto sock_fd = socket(AF_INET, SOCK_STREAM, 0);
 
   if (sock_fd < 0) {
@@ -85,6 +87,12 @@ int main(int argc, char const *argv[]) {
         continue;
       }
 
+      if(read_buf[0] == 'q') {
+        close(sock_fd);
+        perror("reconnect ...");
+        goto reconnect;
+      }
+      
       if (write(sock_fd, read_buf, strlen(read_buf)) < 0) {
         perror("send error");
       }
@@ -92,12 +100,6 @@ int main(int argc, char const *argv[]) {
 
     if (FD_ISSET(sock_fd, &set)) {
       bzero(read_buf, sizeof(read_buf));
-      int bytes = 0;
-      ioctl(sock_fd, FIONREAD, &bytes);
-      if (!(count--) && bytes > 0) {
-        close(sock_fd);
-        break;
-      }
       if (auto e = read(sock_fd, read_buf, sizeof(read_buf)); e == 0) {
         shutdown(sock_fd, SHUT_RDWR);
         perror("peer close"); // should be annotated
