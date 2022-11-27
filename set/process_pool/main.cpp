@@ -13,6 +13,12 @@
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
+#include <sys/syscall.h>
+
+pid_t gettid(void)
+{
+return syscall(SYS_gettid);
+}
 
 #include "Billboard.h"
 
