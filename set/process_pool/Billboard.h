@@ -1,4 +1,5 @@
 #pragma once
+#include <pthread.h>
 #ifndef EX_NETLINK_BILLBOARD_H
 #define EX_NETLINK_BILLBOARD_H
 
@@ -11,13 +12,7 @@
 #include <array>
 #include <vector>
 
-auto gettid()
-{
-  return (long int)syscall(224);
-}
-
-
-thread_local pid_t current_thread_id = gettid();
+thread_local pthread_t current_thread_id = pthread_self();
 
 class Billboard {
  public:
@@ -29,15 +24,15 @@ class Billboard {
 
   void start() {
     if (current_thread_id_ == current_thread_id) {
-      printf("move Billboard in parent process %d\n", current_thread_id_);
-      close(process_communication[0]);
-      fd_ = process_communication[1];
+      printf("move Billboard in parent process %lu\n", current_thread_id_);
+      close(process_communication_[0]);
+      fd_ = process_communication_[1];
       return;
     }
-    close(process_communication[1]);
-    fd_ = process_communication[0];
+    close(process_communication_[1]);
+    fd_ = process_communication_[0];
     current_thread_id_ = current_thread_id;
-    printf("move Billboard in child process %d\n", current_thread_id_);
+    printf("move Billboard in child process %lu\n", current_thread_id_);
   }
 
   void send(std::vector<uint32_t>&);
@@ -45,13 +40,13 @@ class Billboard {
 
  private:
   int process_communication_init() {
-    socketpair(AF_LOCAL, SOCK_STREAM, 0, process_communication.data());
+    socketpair(AF_LOCAL, SOCK_STREAM, 0, process_communication_.data());
     return 0;
   }
 
  private:
-  std::array<int, 2> process_communication;
-  pid_t current_thread_id_;
+  std::array<int, 2> process_communication_;
+  pthread_t current_thread_id_;
   int fd_ = 0;
 };
 

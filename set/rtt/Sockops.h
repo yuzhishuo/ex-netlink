@@ -1,8 +1,10 @@
 #pragma once
 #ifndef LULUYUZHI_RTT_SOCKOPS_H
 #define LULUYUZHI_RTT_SOCKOPS_H
+#include <arpa/inet.h>
 #include <error.h>
 #include <fcntl.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <stdint.h>
@@ -13,11 +15,14 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
-#include <functional>
 #include <algorithm>
+#include <functional>
+#include <iterator>
 #include <string>
+#include <string_view>
 #include <system_error>
 
+#include "IUnique.h"
 namespace luluyuzhi {
 
 class net_system_category : public std::error_category {
@@ -97,6 +102,22 @@ std::error_condition createSocket(int& fd) {
   return {errno, std::system_category()};
 }
 
+enum class ShutType { WR = SHUT_WR, RDWR = SHUT_RDWR };
+
+std::error_condition shutdown(int fd, ShutType type) {
+  if (auto err = ::shutdown(fd, static_cast<int>(type)); err != 0) {
+    return {errno, std::system_category()};
+  }
+  return {};
+}
+
+std::error_condition close(int fd) {
+  if (auto err = ::close(fd); err != 0) {
+    return {errno, std::system_category()};
+  }
+  return {};
+}
+
 std::error_condition connect(int fd, struct ::sockaddr_in* peer_addr) {
   if (::connect(fd, (struct ::sockaddr*)peer_addr,
                 sizeof(struct ::sockaddr_in)) < 0) {
@@ -121,7 +142,7 @@ std::error_condition connectAsync(int fd, struct ::sockaddr_in* peer_addr,
       return {};
     }
     auto save_errno = errno;
-    if (re_code == -1 && save_errno == EAGAIN) {
+    if (re_code == -1 && save_errno == EAGAIN) {  // unblock
       continue;
     }
     if (re_code == -1 && save_errno == EINPROGRESS) {
@@ -163,6 +184,11 @@ std::error_condition listen(int fd, int backlog) {
   }
   return {};
 }
+
+std::error_condition listen(tool::IUnique& unique, int n) {
+  return listen(unique.getId(), n);
+}
+
 static std::function<void(const std::string& message)>
     hold_error_condition_out =
         [](const std::string& message) { std::printf("%s", message.c_str()); };
@@ -172,6 +198,81 @@ void hold_error_condition(const std::error_condition& cond) {
     hold_error_condition_out ? hold_error_condition_out(cond.message())
                              : void(0);
   }
+}
+
+enum class Portocol : int { TCP = 0, UDP };
+enum class PortocolVersion : int { IPV4 = AF_INET, IPV6 = PF_INET6 };
+
+static constexpr char* PortocolTable[] = {"tcp", "udp"};
+static constexpr char* PortocolVersionTable[] = {"ipv4", "ipv6"};
+
+inline constexpr static auto cover2Protocol(enum Portocol portocol) -> const
+    char* {
+  return PortocolTable[static_cast<int>(portocol)];
+}
+
+inline constexpr static auto cover2ProtocolVersion(enum Portocol portocol)
+    -> const char* {
+  return PortocolVersionTable[static_cast<int>(portocol)];
+}
+
+class NetServerDB {
+ public:
+  NetServerDB(std::string_view server_name, std::string_view port_server_name,
+              Portocol portocal, PortocolVersion version)
+      : version_(version) {
+    auto server_info =
+        getservbyname(port_server_name.data(), cover2Protocol(portocal));
+    port_ = server_info->s_port;
+
+    auto host = gethostbyname(server_name.data());
+    if (!host) return;
+
+    struct sockaddr_in addr;
+    bzero(&addr, sizeof(struct sockaddr_in));
+    addr.sin_family = static_cast<int>(version);
+
+    for (size_t i = 0; host->h_addr_list[i]; i++) {
+      memcpy(&addr.sin_addr, (struct in_addr*)host->h_addr_list[0],
+             sizeof(in_addr));
+      addr.sin_port = port_;
+      addrs_.emplace_back(addr);
+    }
+  }
+
+  auto begin() noexcept { return addrs_.begin(); }
+
+  auto end() noexcept { return addrs_.end(); }
+
+ private:
+  std::vector<struct sockaddr_in> addrs_;
+  PortocolVersion version_;
+  int32_t port_;
+};
+
+bool constructor_echo_addr(std::string_view server_name,
+                           struct sockaddr_in& addr) {
+  auto server_info = getservbyname("echo", "tcp");
+  if (!server_info) return false;
+  addr.sin_family = AF_INET;
+  addr.sin_port = server_info->s_port;
+
+  struct hostent* host = gethostbyname(server_name.data());
+  if (!host) return false;
+  if (host->h_addrtype == AF_INET && host->h_length == 4) {
+    for (int i = 0; host->h_addr_list[i]; i++) {
+      printf("IP addr %d: %s\n", i + 1,
+             inet_ntoa(*(struct in_addr*)host->h_addr_list[i]));
+    }
+    if (host->h_addr_list[0]) {
+      memcpy(&addr.sin_addr, (struct in_addr*)host->h_addr_list[0],
+             sizeof(in_addr));
+    } else {
+      printf("unfind server:%s", server_name);
+      return false;
+    }
+  }
+  return true;
 }
 
 }  // namespace luluyuzhi::net

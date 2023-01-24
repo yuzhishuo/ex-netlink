@@ -17,6 +17,7 @@
 int main(int argc, char const *argv[]) {
   sigignore(SIGPIPE);
 
+  #ifdef WAIT_WAKEUP
   if (access(NAMEDPIPENAME, F_OK) != 0) {
     printf("access pip %s error", NAMEDPIPENAME);
   }
@@ -27,6 +28,7 @@ int main(int argc, char const *argv[]) {
     perror("open pipo error");
     exit(-1);
   }
+  #endif
 
 reconnect:
 
@@ -87,12 +89,12 @@ reconnect:
         continue;
       }
 
-      if(read_buf[0] == 'q') {
+      if (read_buf[0] == 'q') {
         close(sock_fd);
         perror("reconnect ...");
         goto reconnect;
       }
-      
+
       if (write(sock_fd, read_buf, strlen(read_buf)) < 0) {
         perror("send error");
       }
@@ -101,8 +103,8 @@ reconnect:
     if (FD_ISSET(sock_fd, &set)) {
       bzero(read_buf, sizeof(read_buf));
       if (auto e = read(sock_fd, read_buf, sizeof(read_buf)); e == 0) {
-        shutdown(sock_fd, SHUT_RDWR);
-        perror("peer close"); // should be annotated
+        close(sock_fd);
+        perror("peer close");  // should be annotated
         exit(0);
       } else if (e < 0) {
         perror("read error");

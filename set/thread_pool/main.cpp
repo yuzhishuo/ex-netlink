@@ -1,10 +1,13 @@
 #include <chrono>
 #include <iostream>
 
-#include "thread_pool.h"
+#include "Thread.h"
+#include "ThreadPool.h"
 using namespace std::chrono;
+using namespace luluyuzhi::tool;
+
 int main(int argc, char const *argv[]) {
-  thread_pool tp;
+  ThreadPool tp;
   tp.push([]() { throw "132"; });
   for (auto i = 0; i < 10; i++)
     tp.push([=]() {

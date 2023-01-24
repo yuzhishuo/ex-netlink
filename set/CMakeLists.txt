@@ -1,4 +1,3 @@
-
 add_subdirectory(poll)
 add_subdirectory(time)
 add_subdirectory(process_pool)
@@ -13,3 +12,8 @@ add_subdirectory(unixsocket)
 add_subdirectory(thread_pool)
 add_subdirectory(atomic)
 add_subdirectory(inotify)
+add_subdirectory(muticast)
+add_subdirectory(macro)
+add_subdirectory(abstractunix)
+add_subdirectory(echo_fd)
+add_subdirectory(loop)

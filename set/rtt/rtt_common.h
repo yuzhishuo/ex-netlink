@@ -1,10 +1,10 @@
 #ifndef EXNETLINK_RTT_RTTCOMMON_CPP
 #define EXNETLINK_RTT_RTTCOMMON_CPP
-#include "sockops.h"
+#include "Sockops.h"
 
 static_assert(sizeof(int64_t) == 8, "rtt protocol require int64_t is 8 bytes.");
 
-struct alignas(1) rtt_package {
+struct alignas(8) rtt_package {
   uint64_t c_send_ts = 0;
   uint64_t s_recv_ts = 0;
   uint64_t s_send_ts = 0;
